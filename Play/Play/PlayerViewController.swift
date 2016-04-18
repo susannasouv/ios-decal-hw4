@@ -24,6 +24,9 @@ class PlayerViewController: UIViewController {
     var artistLabel: UILabel!
     var titleLabel: UILabel!
     
+    var playing: Bool = false
+    let rewindThreshold : Float64 = 3
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         view = UIView(frame: UIScreen.mainScreen().bounds)
@@ -81,7 +84,7 @@ class PlayerViewController: UIViewController {
                                            width / 15.0)
         playPauseButton.setImage(playImage, forState: UIControlState.Normal)
         playPauseButton.setImage(pauseImage, forState: UIControlState.Selected)
-        playPauseButton.addTarget(self, action: "playOrPauseTrack:",
+        playPauseButton.addTarget(self, action: #selector(PlayerViewController.playOrPauseTrack(_:)),
             forControlEvents: UIControlEvents.TouchUpInside)
         view.addSubview(playPauseButton)
         
@@ -91,7 +94,7 @@ class PlayerViewController: UIViewController {
                                           width / 15.0,
                                           width / 15.0)
         previousButton.setImage(previousImage, forState: UIControlState.Normal)
-        previousButton.addTarget(self, action: "previousTrackTapped:",
+        previousButton.addTarget(self, action: #selector(PlayerViewController.previousTrackTapped(_:)),
             forControlEvents: UIControlEvents.TouchUpInside)
         view.addSubview(previousButton)
 
@@ -101,7 +104,7 @@ class PlayerViewController: UIViewController {
                                       width / 15.0,
                                       width / 15.0)
         nextButton.setImage(nextImage, forState: UIControlState.Normal)
-        nextButton.addTarget(self, action: "nextTrackTapped:",
+        nextButton.addTarget(self, action: #selector(PlayerViewController.nextTrackTapped(_:)),
             forControlEvents: UIControlEvents.TouchUpInside)
         view.addSubview(nextButton)
 
@@ -125,11 +128,44 @@ class PlayerViewController: UIViewController {
      *  property accordingly.
      */
     func playOrPauseTrack(sender: UIButton) {
-        let path = NSBundle.mainBundle().pathForResource("Info", ofType: "plist")
-        let clientID = NSDictionary(contentsOfFile: path!)?.valueForKey("client_id") as! String
         let track = tracks[currentIndex]
-        let url = NSURL(string: "https://api.soundcloud.com/tracks/\(track.id)/stream?client_id=\(clientID)")!
+//        let path = NSBundle.mainBundle().pathForResource("Info", ofType: "plist")
+//        let clientID = NSDictionary(contentsOfFile: path!)?.valueForKey("client_id") as! String
+//        let url = NSURL(string: "https://api.soundcloud.com/tracks/\(track.id)/stream?client_id=\(clientID)")!
+        let url = track.getURL()
         // FILL ME IN
+        if ((player.error) != nil) {
+            player = AVPlayer(playerItem: AVPlayerItem(URL: url))
+            loadTrackElements()
+            if (player.currentItem!.status == .ReadyToPlay) {
+                player.play()
+                playing = true
+                sender.selected = true
+            }
+        }
+        else {
+            if (playing) {
+                player.pause()
+                
+            }
+            else {
+                if (player.status == .ReadyToPlay) {
+                    player.play()
+
+                }
+                else if (player.status == .Unknown) {
+                    let currTrackAVPlayerItem = AVPlayerItem(URL: url)
+                    player.replaceCurrentItemWithPlayerItem(currTrackAVPlayerItem) // don't know if this is valid
+
+                    player.play()
+                    
+
+                }
+            }
+            playing = !playing
+            sender.selected = playing
+        }
+        
     
     }
     
@@ -140,7 +176,32 @@ class PlayerViewController: UIViewController {
      * Remember to update the currentIndex
      */
     func nextTrackTapped(sender: UIButton) {
-    
+        if let currInd = currentIndex {
+            if (currInd + 1 < tracks.count) {
+                currentIndex = currentIndex + 1
+            }
+            else {
+                // track out of bounds? reset?
+                currentIndex = 0
+            }
+        }
+        else {
+            currentIndex = 0
+        }
+        let track = tracks[currentIndex]
+        let url = track.getURL()
+        player.replaceCurrentItemWithPlayerItem(AVPlayerItem(URL: url))
+        loadTrackElements()
+        if playing {
+            if (player.currentItem!.status == .ReadyToPlay) {
+                player.play()
+                playing = true
+            }
+        }
+        else {
+            player.pause()
+            playing = false
+        }
     }
 
     /*
@@ -154,7 +215,25 @@ class PlayerViewController: UIViewController {
      */
 
     func previousTrackTapped(sender: UIButton) {
-    
+        let currTime = player.currentItem!.currentTime()
+        if ((CMTimeGetSeconds(currTime) < rewindThreshold) && currentIndex != 0) {
+            // load previous track's data
+            currentIndex = currentIndex - 1
+            let track = tracks[currentIndex]
+            let url = track.getURL()
+            player.replaceCurrentItemWithPlayerItem(AVPlayerItem(URL: url))
+            loadTrackElements()
+            
+        }
+        else {
+            // seek to beginning
+            player.seekToTime(CMTimeMake(0, currTime.timescale))
+            
+        }
+        if (player.currentItem!.status == .ReadyToPlay) {
+            player.play()
+            playing = true
+        }
     }
     
     
